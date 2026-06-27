@@ -1,0 +1,61 @@
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# ==================== 虚拟环境 ====================
+venv/
+.venv/
+env/
+.env
+
+# ==================== 模型权重 & Checkpoints ====================
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+checkpoints/
+output/
+
+# ==================== 数据集 ====================
+dataset/
+
+# ==================== 日志 ====================
+*.log
+runs/
+logs/
+
+# ==================== IDE & 编辑器 ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==================== macOS ====================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ==================== Jupyter ====================
+.ipynb_checkpoints/
+*.ipynb
+
+# ==================== HuggingFace 缓存 ====================
+.cache/
+hf_cache/
+
+# ==================== TensorBoard ====================
+events.out.tfevents.*
+
+# ==================== 其他 ====================
+.env.local
+.env.*.local
+*.tmp
