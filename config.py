@@ -22,7 +22,7 @@ class Config:
     #   ├── train/class_0/img001.png ...
     #   ├── val/  class_0/img001.png ...
     #   └── test/ class_0/img001.png ...
-    data_dir: str = "./dataset"
+    data_dir: str = "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_multitask/dataset_3_cls"
 
     # ==================== 分类任务 ====================
     # 类别数量: 2 为二分类, >2 为多分类
@@ -69,8 +69,8 @@ class Config:
     gradient_accumulation_steps: int = 1  # 显存不足时可增大, 等效于增大 batch_size
 
     # ==================== 日志与保存 ====================
-    output_dir: str = "./output"
-    log_dir: str = "./output/logs"
+    output_dir: str = "./output/BM"
+    log_dir: str = "./output/logs/BM"
     save_every_epoch: int = 10         # 每隔多少 epoch 保存一次 checkpoint
     early_stopping_patience: int = 10   # 验证集不再提升时的等待轮数
     seed: int = 42
