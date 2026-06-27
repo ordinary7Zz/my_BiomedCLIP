@@ -31,7 +31,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from config import Config
-from model import create_classifier
 from data_utils import create_dataloaders, create_kfold_dataloaders
 
 warnings.filterwarnings("ignore")
@@ -185,6 +184,9 @@ def print_metrics(metrics, cm, class_names, phase="Val"):
 # ============================================================================
 
 def run_training(cfg: Config, fold_idx: int = -1):
+    # 延迟导入: 确保 HF_ENDPOINT 已在 main() 中设置
+    from model import create_classifier
+
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
     print(f"\nDevice: {device}")
 
@@ -351,6 +353,11 @@ def main():
     if args.num_classes: cfg.num_classes = args.num_classes
     if args.strategy: cfg.strategy = args.strategy
     if args.batch_size: cfg.batch_size = args.batch_size
+
+    # 设置 HuggingFace 镜像 (国内加速, 需在加载模型前设置)
+    if cfg.hf_endpoint:
+        os.environ["HF_ENDPOINT"] = cfg.hf_endpoint
+        print(f"  HF Mirror: {cfg.hf_endpoint}")
     if args.epochs: cfg.epochs = args.epochs
     if args.lr: cfg.lr = args.lr
     if args.dropout is not None: cfg.dropout = args.dropout

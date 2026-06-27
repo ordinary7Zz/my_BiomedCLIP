@@ -12,9 +12,11 @@ from typing import Optional, List
 class Config:
     # ==================== 模型 ====================
     # BiomedCLIP 模型名称 (从 HuggingFace Hub 加载)
-    model_name: str = "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+    model_name: str = "./pretrained_models/biomedclip"
     # 本地模型路径 (如果已下载, 设置为实际路径即可跳过在线下载)
     local_model_path: Optional[str] = None
+    # HuggingFace 镜像 (国内用户推荐 https://hf-mirror.com)
+    hf_endpoint: str = ""  # 留空用官方, 设为 "https://hf-mirror.com" 用镜像
 
     # ==================== 数据集 ====================
     # 数据根目录, 结构应为:

@@ -91,6 +91,12 @@ def predict_image(model, image_path: str, preprocess, device: str,
 
 def main():
     args = parse_args()
+
+    # 设置 HuggingFace 镜像 (需在加载模型前设置)
+    cfg = Config()
+    if cfg.hf_endpoint:
+        os.environ["HF_ENDPOINT"] = cfg.hf_endpoint
+
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
