@@ -71,20 +71,8 @@ class BiomedCLIPClassifier(nn.Module):
 
     @staticmethod
     def _get_embed_dim(visual) -> int:
-        """多种方式获取视觉编码器输出维度，兼容不同 open_clip 版本"""
-        # 方式 1: 直接属性 (标准 CLIP 模型)
-        if hasattr(visual, 'output_dim'):
-            return visual.output_dim
-
-        # 方式 2: ViT trunk 的 embed_dim (TimmModel 加载 local-dir 时)
-        if hasattr(visual, 'trunk'):
-            trunk = visual.trunk
-            if hasattr(trunk, 'embed_dim'):
-                return trunk.embed_dim
-            if hasattr(trunk, 'num_features'):
-                return trunk.num_features
-
-        # 方式 3: 用 dummy input 推断
+        """获取视觉编码器实际输出维度，兼容不同 open_clip 版本和模型配置"""
+        # 方式 1: 用 dummy input 直接推断 (最可靠)
         try:
             import torch
             dummy = torch.zeros(1, 3, 224, 224)
@@ -94,7 +82,18 @@ class BiomedCLIPClassifier(nn.Module):
         except Exception:
             pass
 
-        # 方式 4: 默认 768 (ViT-B/16)
+        # 方式 2: 直接属性 output_dim (标准 CLIP 模型)
+        if hasattr(visual, 'output_dim'):
+            return visual.output_dim
+
+        # 方式 3: ViT trunk 内部属性
+        if hasattr(visual, 'trunk'):
+            trunk = visual.trunk
+            for attr in ('num_features', 'embed_dim'):
+                if hasattr(trunk, attr):
+                    return getattr(trunk, attr)
+
+        # 方式 4: 硬编码默认值
         return 768
 
     def _init_classifier(self):
