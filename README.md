@@ -60,7 +60,7 @@ dropout: float = 0.3
 python train.py
 
 # 多分类训练
-python train.py --config config_multiclass
+python train.py --config config_multiclass --pretrained output/BM/best_model.pth
 
 # 或命令行覆盖参数 (推荐先试 Linear Probe):
 python train.py --strategy linear_probe --lr 1e-3 --epochs 50 --batch_size 32
@@ -93,10 +93,10 @@ python inference.py \
 # 多分类推理
 python inference.py \
     --config config_multiclass \
-    --ckpt output/BM_multiclass/best_model.pth \
-    --folder /path/to/images/ \
-    --num_classes 3 \
-    --class_names class_A class_B class_C
+    --ckpt output/TIRADS/best_model.pth \
+    --folder /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/sample/images \
+    --num_classes 5 \
+    --class_names 1 2 3 4 5
 ```
 
 CSV 输出格式：

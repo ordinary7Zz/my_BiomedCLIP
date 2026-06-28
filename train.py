@@ -63,6 +63,8 @@ def parse_args():
     parser.add_argument("--use_kfold", action="store_true", default=None)
     parser.add_argument("--dropout", type=float, default=None)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--pretrained", type=str, default=None,
+                        help="预训练模型权重路径 (如用二分类权重初始化多分类 ViT)")
     return parser.parse_args()
 
 
@@ -185,7 +187,7 @@ def print_metrics(metrics, cm, class_names, phase="Val"):
 # 主训练函数
 # ============================================================================
 
-def run_training(cfg, fold_idx: int = -1):
+def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
     # 延迟导入: 确保 HF_ENDPOINT 已在 main() 中设置
     from model import create_classifier
 
@@ -216,6 +218,7 @@ def run_training(cfg, fold_idx: int = -1):
         num_classes=cfg.num_classes,
         strategy=cfg.strategy,
         dropout=cfg.dropout,
+        pretrained=pretrained,
     ).to(device)
 
     print(f"\n模型: {cfg.model_name}")
@@ -396,13 +399,13 @@ def main():
             print(f"\n{'#'*55}")
             print(f"  Fold {fold + 1}/{cfg.kfold_n_splits}")
             print(f"{'#'*55}")
-            score = run_training(cfg, fold_idx=fold)
+            score = run_training(cfg, fold_idx=fold, pretrained=args.pretrained)
             scores.append(score)
         print(f"\n{'='*55}")
         print(f"  K-Fold Average F1: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
         print(f"{'='*55}")
     else:
-        run_training(cfg)
+        run_training(cfg, pretrained=args.pretrained)
 
 
 if __name__ == "__main__":
