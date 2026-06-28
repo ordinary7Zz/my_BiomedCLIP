@@ -22,15 +22,15 @@ env/
 *.safetensors
 *.ckpt
 checkpoints/
-output/
+# output/  # 不再整体忽略，仅忽略权重文件 (.pth 已在上方)  
 
 # ==================== 数据集 ====================
 dataset/
 
 # ==================== 日志 ====================
 *.log
-runs/
-logs/
+# runs/   # 取消忽略，保留训练日志
+# logs/   # 取消忽略，保留 TensorBoard 事件
 
 # ==================== IDE & 编辑器 ====================
 .vscode/
@@ -53,7 +53,7 @@ logs/
 hf_cache/
 
 # ==================== TensorBoard ====================
-events.out.tfevents.*
+# events.out.tfevents.*  # 不再忽略，保留训练曲线
 
 # ==================== 其他 ====================
 .env.local
