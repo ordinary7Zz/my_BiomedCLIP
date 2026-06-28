@@ -106,7 +106,38 @@ CSV 输出格式：
 | img001.png | benign | 0.9234 | 0.9234 | 0.0766 |
 | img002.png | malignant | 0.8712 | 0.1288 | 0.8712 |
 
-### 6. 查看训练曲线
+### 6. 评估
+
+对有标签的测试集进行性能评估，输出 accuracy、precision、recall、f1、混淆矩阵、AUC 等指标。
+
+数据要求：ImageFolder 格式（和训练集结构一致），子文件夹名即真实标签。
+
+```bash
+# 二分类评估（直接用训练时的测试集）
+python evaluate.py --ckpt output/BM/best_model.pth --data_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_multitask/dataset_3_cls/test
+
+# 带类别名
+python evaluate.py --ckpt output/BM/best_model.pth \
+    --data_dir dataset/test \
+    --num_classes 2 \
+    --class_names benign malignant
+
+# 多分类评估
+python evaluate.py \
+    --config config_multiclass \
+    --ckpt output/TIRADS/best_model.pth \
+    --data_dir /path/to/test \
+    --num_classes 5 \
+    --class_names 1 2 3 4 5
+
+# 评估任意有标签数据集（不限于训练时的 test 集）
+python evaluate.py --ckpt output/BM/best_model.pth \
+    --data_dir /path/to/any_labeled_data \
+    --num_classes 2
+```
+
+
+### 7. 查看训练曲线
 
 ```bash
 tensorboard --logdir output/logs
@@ -124,7 +155,8 @@ tensorboard --logdir output/logs
 ├── model.py           # BiomedCLIP 分类模型定义
 ├── data_utils.py      # 数据加载、增强、K-Fold 划分
 ├── train.py           # 训练主脚本
-├── inference.py       # 推理脚本
+├── inference.py       # 推理脚本 (无标签, 输出 CSV)
+├── evaluate.py        # 评估脚本 (有标签, 输出分类指标)
 ├── requirements.txt   # 依赖包
 ├── dataset/           # 你的数据放这里
 └── output/            # 模型权重 + TensorBoard 日志
