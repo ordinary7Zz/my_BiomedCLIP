@@ -72,27 +72,28 @@ python train.py --use_kfold --strategy linear_probe
 ### 5. 推理
 
 ```bash
-# 单张图片推理
+# 单张图片推理（终端打印结果）
 python inference.py --ckpt output/BM/best_model.pth --image test.png --num_classes 2
 
 # 带类别名
 python inference.py --ckpt output/BM/best_model.pth --image test.png \
     --num_classes 2 --class_names benign malignant
 
-# 文件夹批量推理（输出每张图的类别和置信度）
-python inference.py 
+# 文件夹批量推理 → 自动输出 CSV
+python inference.py \
     --ckpt output/BM/best_model.pth \
-    --folder /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/sample/images \
+    --folder /path/to/images/ \
+    --output results.csv \
     --num_classes 2 \
     --class_names benign malignant
-
-# 导出结果到 CSV
-python inference.py --ckpt output/BM/best_model.pth \
-    --folder ./test_images/ \
-    --num_classes 2 \
-    --class_names benign malignant \
-    2>&1 | grep "=>" > results.csv
 ```
+
+CSV 输出格式：
+
+| filename | predict_label | predict_confidence | prob_benign | prob_malignant |
+|----------|---------------|-------------------|-------------|----------------|
+| img001.png | benign | 0.9234 | 0.9234 | 0.0766 |
+| img002.png | malignant | 0.8712 | 0.1288 | 0.8712 |
 
 ### 6. 查看训练曲线
 
