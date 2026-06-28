@@ -16,6 +16,7 @@ import os
 import sys
 import random
 import argparse
+import importlib
 import warnings
 from datetime import datetime
 
@@ -30,7 +31,6 @@ from sklearn.metrics import (
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from config import Config
 from data_utils import create_dataloaders, create_kfold_dataloaders
 
 warnings.filterwarnings("ignore")
@@ -51,6 +51,8 @@ def set_seed(seed: int):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="微调 BiomedCLIP 做医学图像分类")
+    parser.add_argument("--config", type=str, default="config",
+                        help="配置文件模块名 (不含 .py), 如 config 或 config_multiclass")
     parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument("--num_classes", type=int, default=None)
     parser.add_argument("--strategy", type=str, default=None,
@@ -346,7 +348,9 @@ def run_training(cfg: Config, fold_idx: int = -1):
 
 def main():
     args = parse_args()
-    cfg = Config()
+    # 动态加载指定的配置文件
+    config_module = importlib.import_module(args.config)
+    cfg = config_module.Config()
 
     # 命令行覆盖配置
     if args.data_dir: cfg.data_dir = args.data_dir

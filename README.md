@@ -59,6 +59,9 @@ dropout: float = 0.3
 # 使用 config.py 中的默认配置
 python train.py
 
+# 多分类训练
+python train.py --config config_multiclass
+
 # 或命令行覆盖参数 (推荐先试 Linear Probe):
 python train.py --strategy linear_probe --lr 1e-3 --epochs 50 --batch_size 32
 
@@ -86,6 +89,14 @@ python inference.py \
     --output results.csv \
     --num_classes 2 \
     --class_names benign malignant
+
+# 多分类推理
+python inference.py \
+    --config config_multiclass \
+    --ckpt output/BM_multiclass/best_model.pth \
+    --folder /path/to/images/ \
+    --num_classes 3 \
+    --class_names class_A class_B class_C
 ```
 
 CSV 输出格式：

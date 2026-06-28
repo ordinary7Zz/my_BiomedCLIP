@@ -18,6 +18,7 @@
 import os
 import csv
 import argparse
+import importlib
 import warnings
 
 import torch
@@ -26,7 +27,6 @@ from PIL import Image
 from torchvision import transforms
 from tqdm import tqdm
 
-from config import Config
 from model import BiomedCLIPClassifier
 
 warnings.filterwarnings("ignore")
@@ -34,6 +34,8 @@ warnings.filterwarnings("ignore")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="BiomedCLIP 分类推理")
+    parser.add_argument("--config", type=str, default="config",
+                        help="配置文件模块名 (不含 .py), 如 config 或 config_multiclass")
     parser.add_argument("--ckpt", type=str, required=True, help="训练好的模型权重路径")
     parser.add_argument("--image", type=str, default=None, help="单张图片路径")
     parser.add_argument("--folder", type=str, default=None, help="图片文件夹路径")
@@ -47,10 +49,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_model(ckpt_path: str, num_classes: int, device: str):
+def load_model(ckpt_path: str, num_classes: int, device: str, model_name: str):
     """加载训练好的分类模型"""
     model = BiomedCLIPClassifier(
-        model_name=Config.model_name,
+        model_name=model_name,
         num_classes=num_classes,
         strategy="full_finetune",  # 策略不影响推理
     )
@@ -111,8 +113,11 @@ def predict_image(model, image_path: str, preprocess, device: str,
 def main():
     args = parse_args()
 
+    # 动态加载指定的配置文件
+    config_module = importlib.import_module(args.config)
+    cfg = config_module.Config()
+
     # 设置 HuggingFace 镜像 (需在加载模型前设置)
-    cfg = Config()
     if cfg.hf_endpoint:
         os.environ["HF_ENDPOINT"] = cfg.hf_endpoint
 
@@ -129,7 +134,7 @@ def main():
 
     # 加载模型
     print(f"Loading model: {args.ckpt}")
-    model = load_model(args.ckpt, args.num_classes, device)
+    model = load_model(args.ckpt, args.num_classes, device, cfg.model_name)
     preprocess = get_preprocess()
 
     # ---- 单张推理 ----
