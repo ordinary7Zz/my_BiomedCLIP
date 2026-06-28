@@ -199,6 +199,13 @@ def run_training(cfg, fold_idx: int = -1):
     else:
         train_loader, val_loader, test_loader, class_names, class_weights = create_dataloaders(cfg)
 
+    # 自动检测实际类别数，与配置对比
+    actual_num_classes = len(class_names)
+    if actual_num_classes != cfg.num_classes:
+        print(f"\n  ⚠ 警告: 配置 num_classes={cfg.num_classes}，但数据集有 {actual_num_classes} 个类别")
+        print(f"      自动使用数据集实际类别数: {actual_num_classes}")
+        cfg.num_classes = actual_num_classes
+
     # 覆写 class_names (如果 config 中指定了)
     if cfg.class_names is not None:
         class_names = cfg.class_names
