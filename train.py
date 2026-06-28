@@ -185,7 +185,7 @@ def print_metrics(metrics, cm, class_names, phase="Val"):
 # 主训练函数
 # ============================================================================
 
-def run_training(cfg: Config, fold_idx: int = -1):
+def run_training(cfg, fold_idx: int = -1):
     # 延迟导入: 确保 HF_ENDPOINT 已在 main() 中设置
     from model import create_classifier
 
