@@ -82,7 +82,7 @@ python inference.py --ckpt output/BM/best_model.pth --image test.png \
 # 文件夹批量推理 → 自动输出 CSV
 python inference.py \
     --ckpt output/BM/best_model.pth \
-    --folder /path/to/images/ \
+    --folder /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/sample/images \
     --output results.csv \
     --num_classes 2 \
     --class_names benign malignant
