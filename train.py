@@ -2,7 +2,7 @@
 BiomedCLIP 微调训练脚本
 =========================
 支持 Linear Probe 和 Full Fine-tune 两种策略,
-自动处理类别不平衡、混合精度训练、TensorBoard 日志。
+自动处理类别不平衡、混合精度训练、日志保存为文本文件。
 
 用法:
     # 编辑 config.py 后直接运行:
@@ -23,17 +23,110 @@ from datetime import datetime
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, confusion_matrix, classification_report,
 )
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from data_utils import create_dataloaders, create_kfold_dataloaders
 
 warnings.filterwarnings("ignore")
+
+
+# ============================================================================
+# Focal Loss: 专门处理极端类别不平衡
+# ============================================================================
+
+class FocalLoss(nn.Module):
+    """
+    Focal Loss for multi-class classification.
+    
+    公式: FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
+    
+    相比 CrossEntropyLoss + class_weights 的优势:
+      - 自动降低已分类正确样本的 loss, 聚焦难分类样本
+      - 不会因为少数类权重过大而忽略多数类
+      - gamma 越大, 对易分类样本的压制越强
+    
+    Args:
+        alpha: 各类别权重 (可选), shape (num_classes,)
+        gamma: 聚焦参数, 默认 2.0. 越大越关注难样本
+        reduction: "mean" | "sum"
+    """
+    def __init__(self, alpha=None, gamma=2.0, reduction="mean"):
+        super().__init__()
+        self.alpha = alpha          # (num_classes,) tensor or None
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: (N, C) logits
+            targets: (N,) long labels
+        Returns:
+            scalar loss
+        """
+        ce_loss = F.cross_entropy(inputs, targets, reduction="none")  # (N,)
+        pt = torch.exp(-ce_loss)                                       # p_t
+        focal_weight = (1 - pt) ** self.gamma                         # (1-p_t)^gamma
+
+        if self.alpha is not None:
+            alpha_t = self.alpha.to(inputs.device)[targets]            # 每个样本对应类别的 alpha
+            focal_loss = alpha_t * focal_weight * ce_loss
+        else:
+            focal_loss = focal_weight * ce_loss
+
+        if self.reduction == "mean":
+            return focal_loss.mean()
+        elif self.reduction == "sum":
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+
+# ============================================================================
+# 文本日志工具
+# ============================================================================
+
+class TrainingLogger:
+    """将训练指标写入文本日志文件, 同时打印到终端."""
+    def __init__(self, log_file: str):
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        self.log_file = log_file
+        self.fh = open(log_file, "w", encoding="utf-8")
+
+    def log(self, msg: str):
+        """写入日志并打印到终端."""
+        print(msg)
+        self.fh.write(msg + "\n")
+        self.fh.flush()
+
+    def log_epoch(self, epoch: int, train_loss: float, train_acc: float,
+                  val_loss: float, val_acc: float, val_f1: float, lr: float = None):
+        """记录一个 epoch 的训练/验证指标."""
+        lr_str = f" LR={lr:.2e}" if lr is not None else ""
+        line = (f"Epoch {epoch:3d} | "
+                f"Train Loss={train_loss:.4f} Acc={train_acc:.4f} | "
+                f"Val Loss={val_loss:.4f} Acc={val_acc:.4f} "
+                f"F1={val_f1:.4f}{lr_str}")
+        self.log(line)
+
+    def log_section(self, title: str):
+        """记录分隔标题."""
+        self.log(f"\n{'='*60}")
+        self.log(f"  {title}")
+        self.log(f"{'='*60}")
+
+    def log_info(self, msg: str):
+        self.log(f"  {msg}")
+
+    def close(self):
+        self.fh.close()
+        print(f"✅ 日志已保存至: {self.log_file}")
 
 
 # ============================================================================
@@ -227,16 +320,48 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
     print(f"类别: {class_names}")
 
     # ---- 损失函数 ----
-    if cfg.use_class_weights and class_weights is not None:
-        class_weights = class_weights.to(device)
-        print(f"类别权重: {class_weights.tolist()}")
-    else:
-        class_weights = None
+    use_focal = getattr(cfg, "use_focal_loss", False)
 
-    criterion = nn.CrossEntropyLoss(
-        weight=class_weights,
-        label_smoothing=cfg.label_smoothing,
-    )
+    if use_focal:
+        # Focal Loss: 适合极端类别不平衡
+        focal_gamma = getattr(cfg, "focal_gamma", 2.0)
+        focal_alpha = getattr(cfg, "focal_alpha", None)
+        alpha_tensor = None
+        if focal_alpha is not None:
+            # 从训练集统计类别分布, 计算温和的 alpha (逆频率的 sqrt)
+            from collections import Counter
+            if cfg.use_kfold:
+                # K-fold 下从 train_loader 获取
+                label_counter = Counter()
+                for _, labels in train_loader:
+                    label_counter.update(labels.tolist())
+            else:
+                train_labels = [s[1] for s in train_loader.dataset.samples]
+                label_counter = Counter(train_labels)
+            total = sum(label_counter.values())
+            n = cfg.num_classes
+            raw_weights = torch.tensor(
+                [total / (n * label_counter[i]) for i in range(n)],
+                dtype=torch.float32,
+            )
+            # sqrt 温和缩放, 避免极端权重
+            alpha_tensor = raw_weights ** focal_alpha
+            alpha_tensor = alpha_tensor / alpha_tensor.sum() * n  # 归一化到均值为1
+            alpha_tensor = alpha_tensor.to(device)
+            print(f"Focal alpha (sqrt-scaled): {[f'{v:.3f}' for v in alpha_tensor.tolist()]}")
+        criterion = FocalLoss(alpha=alpha_tensor, gamma=focal_gamma, reduction="mean")
+        print(f"损失函数: Focal Loss (gamma={focal_gamma}, alpha_pow={focal_alpha})")
+    else:
+        if cfg.use_class_weights and class_weights is not None:
+            class_weights = class_weights.to(device)
+            print(f"类别权重: {class_weights.tolist()}")
+        else:
+            class_weights = None
+        criterion = nn.CrossEntropyLoss(
+            weight=class_weights,
+            label_smoothing=cfg.label_smoothing,
+        )
+        print(f"损失函数: CrossEntropyLoss")
 
     # ---- 优化器 & 调度器 ----
     if cfg.strategy == "linear_probe":
@@ -266,15 +391,30 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
     # ---- Logger ----
     fold_tag = f"_fold{fold_idx}" if fold_idx >= 0 else ""
     run_name = f"{cfg.strategy}{fold_tag}_{datetime.now().strftime('%m%d_%H%M')}"
-    log_dir = os.path.join(cfg.log_dir, run_name)
-    os.makedirs(log_dir, exist_ok=True)
     os.makedirs(cfg.output_dir, exist_ok=True)
-    writer = SummaryWriter(log_dir)
+    os.makedirs(cfg.log_dir, exist_ok=True)
+    log_file = os.path.join(cfg.log_dir, f"{run_name}.log")
+    logger = TrainingLogger(log_file)
+
+    # 记录训练配置
+    logger.log_section("Training Config")
+    logger.log_info(f"Model:      {cfg.model_name}")
+    logger.log_info(f"Strategy:   {cfg.strategy}")
+    logger.log_info(f"Num Classes:{cfg.num_classes}")
+    logger.log_info(f"Batch Size: {cfg.batch_size}")
+    logger.log_info(f"Epochs:     {cfg.epochs}")
+    logger.log_info(f"LR:         {cfg.lr}")
+    logger.log_info(f"Seed:       {cfg.seed}")
+    logger.log_info(f"Log File:   {log_file}")
 
     # ---- 训练循环 ----
     best_metric = 0.0
     best_epoch = 0
     patience_counter = 0
+
+    logger.log_section("Training Progress")
+    logger.log(f"{'Epoch':>6s} | {'Train Loss':>10s} {'Train Acc':>10s} | "
+               f"{'Val Loss':>10s} {'Val Acc':>10s} {'Val F1':>10s} {'LR':>10s}")
 
     for epoch in range(1, cfg.epochs + 1):
         train_loss, train_acc = train_one_epoch(
@@ -284,6 +424,8 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
         if scheduler is not None:
             scheduler.step()
 
+        current_lr = optimizer.param_groups[0]["lr"]
+
         val_metrics, val_cm, _, _, _ = evaluate(
             model, val_loader, criterion, device, cfg, class_names,
         )
@@ -291,16 +433,10 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
         # 用 F1 作为早停指标
         current_metric = val_metrics["f1_macro"]
 
-        print(f"Epoch {epoch:3d} | Train Loss={train_loss:.4f} Acc={train_acc:.4f} | "
-              f"Val Loss={val_metrics['loss']:.4f} Acc={val_metrics['accuracy']:.4f} "
-              f"F1={val_metrics['f1_macro']:.4f}")
-
-        # TensorBoard
-        writer.add_scalar("Train/Loss", train_loss, epoch)
-        writer.add_scalar("Train/Acc", train_acc, epoch)
-        writer.add_scalar("Val/Loss", val_metrics["loss"], epoch)
-        writer.add_scalar("Val/Acc", val_metrics["accuracy"], epoch)
-        writer.add_scalar("Val/F1", val_metrics["f1_macro"], epoch)
+        # 记录到日志文件
+        logger.log_epoch(epoch, train_loss, train_acc,
+                         val_metrics["loss"], val_metrics["accuracy"],
+                         val_metrics["f1_macro"], current_lr)
 
         # ---- 保存最佳模型 ----
         if current_metric > best_metric:
@@ -309,26 +445,23 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
             patience_counter = 0
             ckpt_path = os.path.join(cfg.output_dir, f"best_model{fold_tag}.pth")
             torch.save(model.state_dict(), ckpt_path)
-            print(f"  ✓ 保存最佳模型 (F1={best_metric:.4f}) -> {ckpt_path}")
+            logger.log(f"  ✓ 保存最佳模型 (F1={best_metric:.4f}) -> {ckpt_path}")
         else:
             patience_counter += 1
 
         # Early Stopping
         if patience_counter >= cfg.early_stopping_patience:
-            print(f"\n  Early stopping at epoch {epoch} (patience={cfg.early_stopping_patience})")
+            logger.log(f"\n  Early stopping at epoch {epoch} (patience={cfg.early_stopping_patience})")
             break
 
         # 定期保存
         if epoch % cfg.save_every_epoch == 0:
             ckpt = os.path.join(cfg.output_dir, f"checkpoint_epoch{epoch}{fold_tag}.pth")
             torch.save(model.state_dict(), ckpt)
-
-    writer.close()
+            logger.log(f"  ✓ 定期保存 checkpoint -> {ckpt}")
 
     # ---- 加载最佳模型, 在测试集上评估 ----
-    print(f"\n{'='*55}")
-    print(f"  加载最佳模型 (Epoch {best_epoch}, F1={best_metric:.4f})")
-    print(f"{'='*55}")
+    logger.log_section(f"Best Model: Epoch {best_epoch}, F1={best_metric:.4f}")
 
     ckpt = torch.load(os.path.join(cfg.output_dir, f"best_model{fold_tag}.pth"), map_location=device)
     model.load_state_dict(ckpt)
@@ -348,6 +481,8 @@ def run_training(cfg, fold_idx: int = -1, pretrained: str = None):
             model, val_loader, criterion, device, cfg, class_names,
         )
         print_metrics(val_metrics, val_cm, class_names, phase="Val (best model)")
+
+    logger.close()
 
     return best_metric
 

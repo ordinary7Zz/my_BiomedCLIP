@@ -18,9 +18,11 @@ BiomedCLIP 评估脚本
 """
 
 import os
+import sys
 import argparse
 import importlib
 import warnings
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -39,6 +41,28 @@ from model import BiomedCLIPClassifier
 warnings.filterwarnings("ignore")
 
 
+# ============================================================================
+# 同时输出到终端和文件的 Logger
+# ============================================================================
+class TeeLogger:
+    """将 print 内容同时写入终端和文件."""
+    def __init__(self, filepath: str):
+        self.terminal = sys.stdout
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+        self.log = open(filepath, "w", encoding="utf-8")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+    def close(self):
+        self.log.close()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="BiomedCLIP 分类评估")
     parser.add_argument("--config", type=str, default="config",
@@ -55,6 +79,8 @@ def parse_args():
                         help="批大小 (默认从配置文件读取)")
     parser.add_argument("--device", type=str, default="cuda",
                         help="设备: cuda 或 cpu")
+    parser.add_argument("--output_file", type=str, default=None,
+                        help="评估结果保存路径 (.txt 或 .log), 留空则仅打印到终端")
     return parser.parse_args()
 
 
@@ -177,6 +203,18 @@ def print_results(metrics, cm, class_names, num_samples):
 def main():
     args = parse_args()
 
+    # ---- 如果指定了输出文件, 创建 TeeLogger ----
+    logger = None
+    output_file = args.output_file
+    if output_file is None:
+        # 未指定则自动生成, 保存在 ckpt 同级目录下
+        ckpt_dir = os.path.dirname(args.ckpt) or "."
+        timestamp = datetime.now().strftime("%m%d_%H%M%S")
+        output_file = os.path.join(ckpt_dir, f"eval_result_{timestamp}.txt")
+
+    logger = TeeLogger(output_file)
+    sys.stdout = logger
+
     # 加载配置文件
     config_module = importlib.import_module(args.config)
     cfg = config_module.Config()
@@ -198,6 +236,7 @@ def main():
     print(f"  类别数:    {num_classes}")
     print(f"  设备:      {device}")
     print(f"  批大小:    {batch_size}")
+    print(f"  结果文件:  {output_file}")
     print(f"{'='*60}")
 
     # ---- 检查数据目录 ----
@@ -263,6 +302,11 @@ def main():
     print(f"\n{'='*60}")
     print(f"  评估完成")
     print(f"{'='*60}\n")
+
+    # ---- 清理 ----
+    sys.stdout = logger.terminal
+    logger.close()
+    print(f"✅ 结果已保存至: {output_file}")
 
 
 if __name__ == "__main__":

@@ -117,7 +117,8 @@ CSV 输出格式：
 python evaluate.py --ckpt output/BM/best_model.pth --data_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_multitask/dataset_3_cls/test
 
 # 带类别名
-python evaluate.py --ckpt output/BM/best_model.pth \
+python evaluate.py \
+    --ckpt output/BM/best_model.pth \
     --data_dir dataset/test \
     --num_classes 2 \
     --class_names benign malignant
@@ -126,7 +127,7 @@ python evaluate.py --ckpt output/BM/best_model.pth \
 python evaluate.py \
     --config config_multiclass \
     --ckpt output/TIRADS/best_model.pth \
-    --data_dir /path/to/test \
+    --data_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Cine-Clip/Cine-Clip_by_TIRADS/test/images \
     --num_classes 5 \
     --class_names 1 2 3 4 5
 

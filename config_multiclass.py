@@ -31,12 +31,12 @@ class Config:
     # class_names = ["class_A", "class_B", "class_C"]
 
     # ==================== 微调策略 ====================
-    strategy: str = "linear_probe"       # "linear_probe" | "full_finetune"
+    strategy: str = "full_finetune"    # linear_probe → full_finetune: 解冻 ViT 学细粒度特征
 
     # ==================== 训练超参 ====================
     batch_size: int = 32
     epochs: int = 50
-    lr: float = 1e-3                     # linear_probe: 1e-3, full_finetune: 1e-5
+    lr: float = 1e-5                     # full_finetune 用更小的学习率
     weight_decay: float = 0.01
     warmup_epochs: int = 3
     lr_scheduler: str = "cosine"
@@ -50,12 +50,15 @@ class Config:
     crop_scale: tuple = (0.85, 1.0)
 
     # ==================== 类别不平衡处理 ====================
-    use_class_weights: bool = True
-    use_weighted_sampler: bool = False
+    use_class_weights: bool = False      # 关掉: 极端不平衡下权重反而导致多数类被忽略
+    use_weighted_sampler: bool = True    # 启用: 按样本权重上采样, 保证每批各类均衡
+    use_focal_loss: bool = True          # Focal Loss: 自动降低易分类样本权重, 聚焦难样本
+    focal_alpha: float = 0.25            # Focal Loss alpha 参数
+    focal_gamma: float = 2.0             # Focal Loss gamma 参数
 
     # ==================== 正则化 ====================
     dropout: float = 0.3
-    label_smoothing: float = 0.1        # 多分类推荐 0.05~0.1
+    label_smoothing: float = 0.0         # Focal Loss 自带正则效果, 关掉 label smoothing
 
     # ==================== 硬件 ====================
     device: str = "cuda"
