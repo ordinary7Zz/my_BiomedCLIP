@@ -11,11 +11,10 @@ BiomedCLIP_deploy/
 ├── infer.py                    # 推理主脚本（含模型定义）
 ├── requirements.txt            # 依赖包
 ├── README.md                   # 使用说明
-└── pretrained_models/          # 本地预训练模型
-    └── biomedclip/
-        ├── open_clip_config.json
-        ├── open_clip_model.safetensors
-        └── ...
+└── pretrained_models/
+    ├── biomedclip/             # BiomedCLIP 骨干预训练权重
+    ├── best_model_binary.pth   # 微调后的二分类权重
+    └── best_model_tirads.pth   # 微调后的 TIRADS 五分类权重
 ```
 
 ---
@@ -28,57 +27,67 @@ pip install -r requirements.txt
 
 ---
 
+## 准备预训练模型
+
+推理时需要 BiomedCLIP 预训练骨干权重（用于初始化结构，分类权重由 `--ckpt` 提供）。
+
+**方式一（推荐）：使用本地模型**
+
+将 BiomedCLIP 模型文件放到 `./pretrained_models/biomedclip/` 目录，脚本会自动识别：
+
+```
+pretrained_models/biomedclip/
+├── open_clip_config.json
+├── open_clip_model.safetensors   # 或 pytorch_model.bin
+└── ...
+```
+
+**方式二：从 HuggingFace Hub 自动下载**
+
+若本地目录不存在，脚本自动从 Hub 下载（需联网）。可通过环境变量使用镜像：
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+---
+
 ## 用法
 
 ### 仅推理（输出 CSV）
 
-二分类：
-
 ```bash
 python infer.py \
-    --ckpt pretrained_models/best_model.pth \
+    --ckpt ./pretrained_models/best_model_binary.pth \
     --folder /path/to/images/ \
     --num_classes 2 \
     --class_names benign malignant \
-    --output results.csv
-```
-
-TIRADS 五分类：
-
-```bash
-python infer.py \
-    --ckpt pretrained_models/tirads_model.pth \
-    --folder /path/to/images/ \
-    --num_classes 5 \
-    --class_names 1 2 3 4 5 \
     --output results.csv
 ```
 
 ### 推理 + 性能评估（提供标签文件）
 
-二分类：
-
 ```bash
 python infer.py \
-    --ckpt pretrained_models/best_model.pth \
+    --ckpt ./pretrained_models/best_model_binary.pth \
     --folder /path/to/images/ \
     --num_classes 2 \
     --class_names benign malignant \
-    --label_json labels.json \
+    --label_json /path/to/labels.json \
     --label_field malignancy \
     --output results.csv \
     --eval_output eval_result.txt
 ```
 
-TIRADS 五分类：
+TIRADS 五分类示例：
 
 ```bash
 python infer.py \
-    --ckpt pretrained_models/tirads_model.pth \
+    --ckpt ./pretrained_models/best_model_tirads.pth \
     --folder /path/to/images/ \
     --num_classes 5 \
     --class_names 1 2 3 4 5 \
-    --label_json labels.json \
+    --label_json /path/to/labels.json \
     --label_field tirads \
     --output results.csv \
     --eval_output eval_result.txt
